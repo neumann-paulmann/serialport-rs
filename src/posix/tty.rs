@@ -328,8 +328,12 @@ impl TTYPort {
     /// Sends 0-valued bits over the port for a set duration
     pub fn send_break(&self, duration: BreakDuration) -> Result<()> {
         match duration {
-            BreakDuration::Short => nix::sys::termios::tcsendbreak(self.fd, 0),
-            BreakDuration::Arbitrary(n) => nix::sys::termios::tcsendbreak(self.fd, n.get()),
+            BreakDuration::Short => {
+                nix::sys::termios::tcsendbreak(unsafe { BorrowedFd::borrow_raw(self.fd) }, 0)
+            }
+            BreakDuration::Arbitrary(n) => {
+                nix::sys::termios::tcsendbreak(unsafe { BorrowedFd::borrow_raw(self.fd) }, n.get())
+            }
         }
         .map_err(|e| e.into())
     }
@@ -429,11 +433,12 @@ impl io::Write for TTYPort {
             return Err(io::Error::from(Error::from(e)));
         }
 
-        nix::unistd::write(self.fd, buf).map_err(|e| io::Error::from(Error::from(e)))
+        nix::unistd::write(unsafe { BorrowedFd::borrow_raw(self.fd) }, buf)
+            .map_err(|e| io::Error::from(Error::from(e)))
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        nix::sys::termios::tcdrain(self.fd)
+        nix::sys::termios::tcdrain(unsafe { BorrowedFd::borrow_raw(self.fd) })
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "flush failed"))
     }
 }
